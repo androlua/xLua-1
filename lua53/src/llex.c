@@ -37,13 +37,15 @@
 
 
 /* ORDER RESERVED */
-static const char *const luaX_tokens [] = {
+static const char *const luaX_tokens[] = {
     "and", "break", "do", "else", "elseif",
     "end", "false", "for", "function", "goto", "if",
     "in", "local", "nil", "not", "or", "repeat",
     "return", "then", "true", "until", "while",
     "//", "..", "...", "==", ">=", "<=", "~=",
-    "<<", ">>", "::", "<eof>",
+    "<<", ">>",
+    "->", "=>", "<lambda>",
+    "::", "<eof>",
     "<number>", "<integer>", "<name>", "<string>"
 };
 
@@ -473,6 +475,7 @@ static int llex(LexState *ls, SemInfo *seminfo) {
             }
             case '-': {  /* '-' or '--' (comment) */
                 next(ls);
+                if (check_next1(ls, '>')) return TK_LET;
                 if (ls->current != '-') return '-';
                 /* else is a comment */
                 next(ls);
@@ -502,6 +505,7 @@ static int llex(LexState *ls, SemInfo *seminfo) {
             case '=': {
                 next(ls);
                 if (check_next1(ls, '=')) return TK_EQ;
+                if (check_next1(ls, '>')) return TK_MEAN;
                 else return '=';
             }
             case '<': {
@@ -557,6 +561,10 @@ static int llex(LexState *ls, SemInfo *seminfo) {
                 next(ls);
                 if (check_next1(ls, '|')) return TK_OR;
                 return '|';
+            }
+            case '\\': {
+                next(ls);
+                return TK_LAMBDA;
             }
             case '0': case '1': case '2': case '3': case '4':
             case '5': case '6': case '7': case '8': case '9': {

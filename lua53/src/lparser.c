@@ -61,6 +61,7 @@ typedef struct BlockCnt {
 */
 static void statement (LexState *ls);
 static void expr (LexState *ls, expdesc *v);
+static void retstat(LexState *ls);
 
 
 /* semantic error */
@@ -799,6 +800,55 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   close_func(ls);
 }
 
+static void parlist2(LexState *ls) {
+    /* parlist2 -> '(' [ param { ',' param } ] ')' */
+    /* parlist2 -> [ param { ',' param } ] */
+    if (testnext(ls, '(')) {
+        parlist(ls);
+        checknext(ls, ')');
+        return;
+    }
+    FuncState *fs = ls->fs;
+    Proto *f = fs->f;
+    int nparams = 0;
+    f->is_vararg = 0;
+    do {
+        switch (ls->t.token) {
+            case TK_NAME: {  /* param -> NAME */
+                new_localvar(ls, str_checkname(ls));
+                nparams++;
+                break;
+            }
+            case TK_DOTS: {  /* param -> '...' */
+                luaX_next(ls);
+                f->is_vararg = 1;
+                break;
+            }
+            default: luaX_syntaxerror(ls, "<name> or '...' expected");
+        }
+    } while (!f->is_vararg && testnext(ls, ','));
+    adjustlocalvars(ls, nparams);
+    f->numparams = cast_byte(fs->nactvar);
+    luaK_reserveregs(fs, fs->nactvar);  /* reserve register for parameters */
+}
+
+static void body2(LexState *ls, expdesc *e, int line) {
+    /* body2 -> parlist2 -> explist */
+    /* body2 -> parlist2 [ '=>' ] stat */
+    FuncState new_fs;
+    BlockCnt bl;
+    new_fs.f = addprototype(ls);
+    new_fs.f->linedefined = line;
+    open_func(ls, &new_fs, &bl);
+    parlist2(ls);
+    if (testnext(ls, TK_LET))
+        retstat(ls);
+    else if (testnext(ls, TK_MEAN) | 1)
+        statement(ls);
+    new_fs.f->lastlinedefined = ls->linenumber;
+    codeclosure(ls, e);
+    close_func(ls);
+}
 
 static int explist (LexState *ls, expdesc *v) {
   /* explist -> expr { ',' expr } */
@@ -971,6 +1021,11 @@ static void simpleexp (LexState *ls, expdesc *v) {
     case TK_FUNCTION: {
       luaX_next(ls);
       body(ls, v, 0, ls->linenumber);
+      return;
+    }
+    case TK_LAMBDA: {
+      luaX_next(ls);
+      body2(ls, v, ls->linenumber);
       return;
     }
     default: {
