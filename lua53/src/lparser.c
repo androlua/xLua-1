@@ -715,29 +715,34 @@ static void field (LexState *ls, struct ConsControl *cc) {
 }
 
 
-static void constructor (LexState *ls, expdesc *t) {
-  /* constructor -> '{' [ field { sep field } [sep] ] '}'
-     sep -> ',' | ';' */
-  FuncState *fs = ls->fs;
-  int line = ls->linenumber;
-  int pc = luaK_codeABC(fs, OP_NEWTABLE, 0, 0, 0);
-  struct ConsControl cc;
-  cc.na = cc.nh = cc.tostore = 0;
-  cc.t = t;
-  init_exp(t, VRELOCABLE, pc);
-  init_exp(&cc.v, VVOID, 0);  /* no value (yet) */
-  luaK_exp2nextreg(ls->fs, t);  /* fix it at stack top */
-  checknext(ls, '{');
-  do {
-    lua_assert(cc.v.k == VVOID || cc.tostore > 0);
-    if (ls->t.token == '}') break;
-    closelistfield(fs, &cc);
-    field(ls, &cc);
-  } while (testnext(ls, ',') || testnext(ls, ';'));
-  check_match(ls, '}', '{', line);
-  lastlistfield(fs, &cc);
-  SETARG_B(fs->f->code[pc], luaO_int2fb(cc.na)); /* set initial array size */
-  SETARG_C(fs->f->code[pc], luaO_int2fb(cc.nh));  /* set initial table size */
+static void constructor(LexState *ls, expdesc *t) {
+    /* constructor -> '{' [ field { sep field } [sep] ] '}' [ '#' size ]
+       sep -> ',' | ';' */
+    FuncState *fs = ls->fs;
+    int line = ls->linenumber;
+    int pc = luaK_codeABC(fs, OP_NEWTABLE, 0, 0, 0);
+    struct ConsControl cc;
+    int na = 0;
+    cc.na = cc.nh = cc.tostore = 0;
+    cc.t = t;
+    init_exp(t, VRELOCABLE, pc);
+    init_exp(&cc.v, VVOID, 0);  /* no value (yet) */
+    luaK_exp2nextreg(ls->fs, t);  /* fix it at stack top */
+    checknext(ls, '{');
+    do {
+        lua_assert(cc.v.k == VVOID || cc.tostore > 0);
+        if (ls->t.token == '}') break;
+        closelistfield(fs, &cc);
+        field(ls, &cc);
+    } while (testnext(ls, ',') || testnext(ls, ';'));
+    check_match(ls, '}', '{', line);
+    lastlistfield(fs, &cc);
+    if (testnext(ls, '#')) {
+        check_match(ls, TK_INT, '#', line);
+        na = (int)ls->t.seminfo.i & 0x3FFFFFFF;
+    }
+    SETARG_B(fs->f->code[pc], luaO_int2fb(cc.na > na ? cc.na : na)); /* set initial array size */
+    SETARG_C(fs->f->code[pc], luaO_int2fb(cc.nh));  /* set initial table size */
 }
 
 /* }====================================================================== */
