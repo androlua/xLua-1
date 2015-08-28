@@ -93,6 +93,9 @@ static int condjump (FuncState *fs, OpCode op, int A, int B, int C) {
   return luaK_jump(fs);
 }
 
+int luaK_condjump(FuncState *fs, OpCode op, int A, int B, int C) {
+    return condjump(fs, op, A, B, C);
+}
 
 static void fixjump (FuncState *fs, int pc, int dest) {
   Instruction *jmp = &fs->f->code[pc];
@@ -305,6 +308,9 @@ static void freeexp (FuncState *fs, expdesc *e) {
     freereg(fs, e->u.info);
 }
 
+void luaK_freeexp(FuncState *fs, expdesc *e) {
+    return freeexp(fs, e);
+}
 
 /*
 ** Use scanner's table to cache position of constants in constant list
@@ -492,6 +498,9 @@ static void discharge2anyreg (FuncState *fs, expdesc *e) {
   }
 }
 
+void luaK_discharge2anyreg(FuncState *fs, expdesc *e) {
+    return discharge2anyreg(fs, e);
+}
 
 static void exp2reg (FuncState *fs, expdesc *e, int reg) {
   discharge2reg(fs, e, reg);
