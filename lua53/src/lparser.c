@@ -841,9 +841,14 @@ static void body2(LexState *ls, expdesc *e, int line) {
     new_fs.f->linedefined = line;
     open_func(ls, &new_fs, &bl);
     parlist2(ls);
-    if (testnext(ls, TK_LET))
+    if (testnext(ls, TK_LET)) {
+        enterlevel(ls);
         retstat(ls);
-    else if (testnext(ls, TK_MEAN) | 1)
+        lua_assert(ls->fs->f->maxstacksize >= ls->fs->freereg &&
+            ls->fs->freereg >= ls->fs->nactvar);
+        ls->fs->freereg = ls->fs->nactvar;  /* free registers */
+        leavelevel(ls);
+    } else if (testnext(ls, TK_MEAN) | 1)
         statement(ls);
     new_fs.f->lastlinedefined = ls->linenumber;
     codeclosure(ls, e);
