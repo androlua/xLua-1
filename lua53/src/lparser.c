@@ -1141,36 +1141,7 @@ static void mid_expr(LexState *ls, expdesc *v) {
         int t = NO_JUMP, f = NO_JUMP;
         luaK_goiftrue(ls->fs, v);
         expr(ls, &v2);
-        luaK_dischargevars(ls->fs, &v2);
-        if (VJMP == v2.k) {
-            f = luaK_jump(ls->fs);
-            t = v2.u.info;
-        } else {
-            char is_true = 0, is_false = 0, done = 0;
-            switch (v2.k) {
-                case VK: case VKFLT: case VKINT: case VTRUE:
-                    is_true = 1; break;
-                case VNIL: case VFALSE:
-                    is_false = 1; break;
-            }
-            if (v2.k == VRELOCABLE) {
-                Instruction ie = getcode(ls->fs, &v2);
-                if (GET_OPCODE(ie) == OP_NOT) {
-                    ls->fs->pc--;
-                    t = luaK_condjump(ls->fs, OP_TEST, GETARG_B(ie), 0, 0);
-                    f = luaK_condjump(ls->fs, OP_TEST, GETARG_B(ie), 0, 1);
-                    done = 1;
-                }
-            }
-            if (!done) {
-                luaK_discharge2anyreg(ls->fs, &v2);
-                luaK_freeexp(ls->fs, &v2);
-                if (!is_false) t = luaK_condjump(ls->fs, OP_TESTSET, NO_REG, v2.u.info, 1);
-                if (!is_true) f = luaK_condjump(ls->fs, OP_TESTSET, NO_REG, v2.u.info, 0);
-            }
-        }
-        luaK_concat(ls->fs, &f, v2.f);
-        luaK_concat(ls->fs, &t, v2.t);
+        luaK_thisvalue(ls->fs, &v2, &t, &f);
         luaK_patchtohere(ls->fs, v->f);
         check_match(ls, TK_DBCOLON, '?', line);
         expr(ls, &v2);

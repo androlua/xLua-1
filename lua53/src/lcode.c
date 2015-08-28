@@ -962,3 +962,36 @@ void luaK_setlist (FuncState *fs, int base, int nelems, int tostore) {
   fs->freereg = base + 1;  /* free registers with list values */
 }
 
+void luaK_thisvalue(FuncState *fs, expdesc *e, int *t, int *f) {
+    luaK_dischargevars(fs, e);
+    if (VJMP == e->k) {
+        *f = luaK_jump(fs);
+        *t = e->u.info;
+    } else {
+        char done = 0;
+        if (e->k == VRELOCABLE) {
+            Instruction ie = getcode(fs, e);
+            if (GET_OPCODE(ie) == OP_NOT) {
+                fs->pc--;
+                *t = condjump(fs, OP_TEST, GETARG_B(ie), 0, 0);
+                *f = condjump(fs, OP_TEST, GETARG_B(ie), 0, 1);
+                done = 1;
+            }
+        }
+        if (!done) {
+            char is_true = 0, is_false = 0;
+            switch (e->k) {
+                case VK: case VKFLT: case VKINT: case VTRUE:
+                    is_true = 1; break;
+                case VNIL: case VFALSE:
+                    is_false = 1; break;
+            }
+            discharge2anyreg(fs, e);
+            freeexp(fs, e);
+            if (!is_false) *t = luaK_condjump(fs, OP_TESTSET, NO_REG, e->u.info, 1);
+            if (!is_true) *f = luaK_condjump(fs, OP_TESTSET, NO_REG, e->u.info, 0);
+        }
+    }
+    luaK_concat(fs, f, e->f);
+    luaK_concat(fs, t, e->t);
+}

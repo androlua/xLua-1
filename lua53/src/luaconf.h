@@ -744,7 +744,7 @@
 
 
 #ifdef _MSC_VER
-#pragma warning(error : 4133 4020; disable : 4098)
+#pragma warning(error : 4133 4020 4047; disable : 4098)
 #endif
 
 
