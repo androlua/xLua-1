@@ -964,17 +964,19 @@ void luaK_setlist (FuncState *fs, int base, int nelems, int tostore) {
 
 void luaK_thisvalue(FuncState *fs, expdesc *e, int *t, int *f) {
     luaK_dischargevars(fs, e);
+    luaK_concat(fs, t, e->t);
+    luaK_concat(fs, f, e->f);
     if (VJMP == e->k) {
-        *f = luaK_jump(fs);
-        *t = e->u.info;
+        luaK_concat(fs, f, luaK_jump(fs));
+        luaK_concat(fs, t, e->u.info);
     } else {
         char done = 0;
         if (e->k == VRELOCABLE) {
             Instruction ie = getcode(fs, e);
             if (GET_OPCODE(ie) == OP_NOT) {
                 fs->pc--;
-                *t = condjump(fs, OP_TEST, GETARG_B(ie), 0, 0);
-                *f = condjump(fs, OP_TEST, GETARG_B(ie), 0, 1);
+                luaK_concat(fs, t, condjump(fs, OP_TEST, GETARG_B(ie), 0, 0));
+                luaK_concat(fs, f, condjump(fs, OP_TEST, GETARG_B(ie), 0, 1));
                 done = 1;
             }
         }
@@ -988,10 +990,8 @@ void luaK_thisvalue(FuncState *fs, expdesc *e, int *t, int *f) {
             }
             discharge2anyreg(fs, e);
             freeexp(fs, e);
-            if (!is_false) *t = luaK_condjump(fs, OP_TESTSET, NO_REG, e->u.info, 1);
-            if (!is_true) *f = luaK_condjump(fs, OP_TESTSET, NO_REG, e->u.info, 0);
+            if (!is_false) luaK_concat(fs, t, luaK_condjump(fs, OP_TESTSET, NO_REG, e->u.info, 1));
+            if (!is_true) luaK_concat(fs, f, luaK_condjump(fs, OP_TESTSET, NO_REG, e->u.info, 0));
         }
     }
-    luaK_concat(fs, f, e->f);
-    luaK_concat(fs, t, e->t);
 }

@@ -1150,6 +1150,7 @@ static void mid_expr(LexState *ls, expdesc *v) {
         luaK_concat(ls->fs, &v2.t, t);
         *v = v2;
     } else if (testnext(ls, TK_MEAN)) { //  选择表达式 a => b -> c ; d
+        int line = ls->linenumber;
 
     }
 }
