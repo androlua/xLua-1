@@ -32,7 +32,7 @@ enum RESERVED {
     /* other terminal symbols */
     TK_IDIV, TK_CONCAT, TK_DOTS, TK_EQ, TK_GE, TK_LE, TK_NE,
     TK_SHL, TK_SHR,
-    TK_LET, TK_MEAN, TK_LAMBDA,
+    TK_LET, TK_MEAN, TK_LAMBDA, TK_SET,
     TK_DBCOLON, TK_EOS,
     TK_FLT, TK_INT, TK_NAME, TK_STRING
 };
