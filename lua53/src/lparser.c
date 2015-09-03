@@ -812,21 +812,23 @@ static void parlist2(LexState *ls) {
     Proto *f = fs->f;
     int nparams = 0;
     f->is_vararg = 0;
-    do {
-        switch (ls->t.token) {
-            case TK_NAME: {  /* param -> NAME */
-                new_localvar(ls, str_checkname(ls));
-                nparams++;
-                break;
+    if (ls->t.token == TK_NAME || ls->t.token == TK_DOTS) {
+        do {
+            switch (ls->t.token) {
+                case TK_NAME: {  /* param -> NAME */
+                    new_localvar(ls, str_checkname(ls));
+                    nparams++;
+                    break;
+                }
+                case TK_DOTS: {  /* param -> '...' */
+                    luaX_next(ls);
+                    f->is_vararg = 1;
+                    break;
+                }
+                default: luaX_syntaxerror(ls, "<name> or '...' expected");
             }
-            case TK_DOTS: {  /* param -> '...' */
-                luaX_next(ls);
-                f->is_vararg = 1;
-                break;
-            }
-            default: luaX_syntaxerror(ls, "<name> or '...' expected");
-        }
-    } while (!f->is_vararg && testnext(ls, ','));
+        } while (!f->is_vararg && testnext(ls, ','));
+    }
     adjustlocalvars(ls, nparams);
     f->numparams = cast_byte(fs->nactvar);
     luaK_reserveregs(fs, fs->nactvar);  /* reserve register for parameters */
@@ -1150,7 +1152,6 @@ static void mid_expr(LexState *ls, expdesc *v) {
         luaK_concat(ls->fs, &v2.t, t);
         *v = v2;
     } else if (testnext(ls, TK_MEAN)) { //  选择表达式 a => b -> c ; d
-        int line = ls->linenumber;
 
     }
 }
@@ -1224,36 +1225,47 @@ static void check_conflict (LexState *ls, struct LHS_assign *lh, expdesc *v) {
 }
 
 
-static void assignment (LexState *ls, struct LHS_assign *lh, int nvars) {
-  expdesc e;
-  check_condition(ls, vkisvar(lh->v.k), "syntax error");
-  if (testnext(ls, ',')) {  /* assignment -> ',' suffixedexp assignment */
-    struct LHS_assign nv;
-    nv.prev = lh;
-    suffixedexp(ls, &nv.v);
-    if (nv.v.k != VINDEXED)
-      check_conflict(ls, lh, &nv.v);
-    checklimit(ls->fs, nvars + ls->L->nCcalls, LUAI_MAXCCALLS,
-                    "C levels");
-    assignment(ls, &nv, nvars+1);
-  }
-  else {  /* assignment -> '=' explist */
-    int nexps;
-    checknext(ls, '=');
-    nexps = explist(ls, &e);
-    if (nexps != nvars) {
-      adjust_assign(ls, nvars, nexps, &e);
-      if (nexps > nvars)
-        ls->fs->freereg -= nexps - nvars;  /* remove extra values */
+static void assignment(LexState *ls, struct LHS_assign *lh, int nvars) {
+    expdesc e;
+    check_condition(ls, vkisvar(lh->v.k) || (1 == nvars && TK_SET == ls->t.token), "syntax error(left value required)");
+    if (testnext(ls, ',')) {  /* assignment -> ',' suffixedexp assignment */
+        struct LHS_assign nv;
+        nv.prev = lh;
+        suffixedexp(ls, &nv.v);
+        if (nv.v.k != VINDEXED)
+            check_conflict(ls, lh, &nv.v);
+        checklimit(ls->fs, nvars + ls->L->nCcalls, LUAI_MAXCCALLS,
+            "C levels");
+        assignment(ls, &nv, nvars + 1);
+    } else {  /* assignment -> '=' explist */
+        int nexps;
+        if (1 == nvars && testnext(ls, TK_SET)) {
+            expdesc *t = &lh->v, k, one;
+            one.k = VKINT;
+            one.t = one.f = NO_JUMP;
+            one.u.ival = 1;
+            luaK_exp2anyregup(ls->fs, t);
+            luaK_reserveregs(ls->fs, 1);
+            k = *t;
+            luaK_exp2reg(ls->fs, &k, ls->fs->freereg - 1);
+            luaK_prefix(ls->fs, OPR_LEN, &k, ls->linenumber);
+            luaK_posfix(ls->fs, OPR_ADD, &k, &one, ls->linenumber);
+            luaK_indexed(ls->fs, t, &k);
+        } else
+            checknext(ls, '=');
+        nexps = explist(ls, &e);
+        if (nexps != nvars) {
+            adjust_assign(ls, nvars, nexps, &e);
+            if (nexps > nvars)
+                ls->fs->freereg -= nexps - nvars;  /* remove extra values */
+        } else {
+            luaK_setoneret(ls->fs, &e);  /* close last expression */
+            luaK_storevar(ls->fs, &lh->v, &e);
+            return;  /* avoid default */
+        }
     }
-    else {
-      luaK_setoneret(ls->fs, &e);  /* close last expression */
-      luaK_storevar(ls->fs, &lh->v, &e);
-      return;  /* avoid default */
-    }
-  }
-  init_exp(&e, VNONRELOC, ls->fs->freereg-1);  /* default assignment */
-  luaK_storevar(ls->fs, &lh->v, &e);
+    init_exp(&e, VNONRELOC, ls->fs->freereg - 1);  /* default assignment */
+    luaK_storevar(ls->fs, &lh->v, &e);
 }
 
 
@@ -1568,19 +1580,23 @@ static void funcstat (LexState *ls, int line) {
 }
 
 
-static void exprstat (LexState *ls) {
-  /* stat -> func | assignment */
-  FuncState *fs = ls->fs;
-  struct LHS_assign v;
-  suffixedexp(ls, &v.v);
-  if (ls->t.token == '=' || ls->t.token == ',') { /* stat -> assignment ? */
-    v.prev = NULL;
-    assignment(ls, &v, 1);
-  }
-  else {  /* stat -> func */
-    check_condition(ls, v.v.k == VCALL, "syntax error");
-    SETARG_C(getcode(fs, &v.v), 1);  /* call statement uses no results */
-  }
+static void exprstat(LexState *ls) {
+    /* stat -> func | assignment */
+    FuncState *fs = ls->fs;
+    struct LHS_assign v;
+    suffixedexp(ls, &v.v);
+    switch (ls->t.token) {
+        case '=':
+        case ',':
+        case TK_SET: {    /* stat -> assignment ? */
+            v.prev = NULL;
+            assignment(ls, &v, 1);
+        } break;
+        default: {/* stat -> func */
+            check_condition(ls, v.v.k == VCALL, "syntax error");
+            SETARG_C(getcode(fs, &v.v), 1);  /* call statement uses no results */
+        } break;
+    }
 }
 
 
