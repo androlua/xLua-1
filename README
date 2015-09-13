@@ -32,7 +32,7 @@ extend lua syntax
     [d, e] -> f;
     g
   等价于
-  a == b ? c :
-  a == d || a == e ? f :
+  a == b ? c ::
+  a == d || a == e ? f ::
   g
   但是 a 只是计算一次
