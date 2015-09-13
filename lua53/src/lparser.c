@@ -850,8 +850,10 @@ static void body2(LexState *ls, expdesc *e, int line) {
             ls->fs->freereg >= ls->fs->nactvar);
         ls->fs->freereg = ls->fs->nactvar;  /* free registers */
         leavelevel(ls);
-    } else if (testnext(ls, TK_MEAN) | 1)
+    } else {
+        testnext(ls, TK_MEAN);
         statement(ls);
+    }
     new_fs.f->lastlinedefined = ls->linenumber;
     codeclosure(ls, e);
     close_func(ls);
