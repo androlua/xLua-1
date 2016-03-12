@@ -83,6 +83,8 @@ LUAI_FUNC void luaK_posfix (FuncState *fs, BinOpr op, expdesc *v1,
                             expdesc *v2, int line);
 LUAI_FUNC void luaK_setlist (FuncState *fs, int base, int nelems, int tostore);
 
+LUAI_FUNC int luaK_freeexp(FuncState *fs, expdesc *e);
 LUAI_FUNC void luaK_thisvalue(FuncState *fs, expdesc *e, int *t, int *f);
+LUAI_FUNC int luaK_condjump(FuncState *fs, OpCode op, int A, int B, int C);
 
 #endif

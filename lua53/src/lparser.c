@@ -1135,23 +1135,57 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
 
 static void mid_expr(LexState *ls, expdesc *v) {
     subexpr(ls, v, 0);
-    if (testnext(ls, '?')) {    //  条件表达式 a ? b :: c
+    if (testnext(ls, '?')) {    /*  条件表达式 a ? b :: c */
         int line = ls->linenumber;
-        expdesc v2;
-        int t = NO_JUMP, f = NO_JUMP;
+        int t = NO_JUMP, f = NO_JUMP, jp;
         luaK_goiftrue(ls->fs, v);
-        expr(ls, &v2);
-        luaK_thisvalue(ls->fs, &v2, &t, &f);
+        jp = v->f;
+        expr(ls, v);
+        luaK_thisvalue(ls->fs, v, &t, &f);
         luaK_patchtohere(ls->fs, v->f);
         check_match(ls, TK_DBCOLON, '?', line);
-        expr(ls, &v2);
-        luaK_dischargevars(ls->fs, &v2);
-        luaK_concat(ls->fs, &v2.f, f);
-        luaK_concat(ls->fs, &v2.t, t);
-        *v = v2;
-    } else if (testnext(ls, TK_MEAN)) { //  选择表达式 a => b -> c ; d
-        int line = ls->linenumber;
+        expr(ls, v);
+        luaK_dischargevars(ls->fs, v);
+        luaK_concat(ls->fs, &v->f, f);
+        luaK_concat(ls->fs, &v->t, t);
+    } else if (testnext(ls, TK_MEAN)) {
+        /*  selection expression
+            a => b -> c :: [d, e] -> f :: g
 
+            a =>
+                b -> c;
+                [d, e] -> f;
+                g
+        */
+        int line = ls->linenumber;
+        expdesc e;
+        int dest = luaK_exp2RK(ls->fs, v);
+        int cj = NO_JUMP, et = NO_JUMP, ef = NO_JUMP;
+        int freed = 0;
+        for (;;) {  /* read all case */
+            luaK_patchtohere(ls->fs, cj);
+            if (testnext(ls, '[')) {    /* [d, e] -> f */
+                expr(ls, &e);
+                while (testnext(ls, ',')) {
+
+                }
+            } else {
+                expr(ls, &e);
+                if (testnext(ls, TK_LET)) { /* b -> c */
+                    int src = luaK_exp2RK(ls->fs, &e);
+                    luaK_freeexp(ls->fs, &e);
+                    cj = luaK_condjump(ls->fs, OP_EQ, 0, dest, src);
+                    expr(ls, &e);
+                    luaK_thisvalue(ls->fs, &e, &et, &ef);
+                } else {
+
+                    break; /* default value */
+                }
+            }
+        }
+        luaK_concat(ls->fs, &e.t, et);
+        luaK_concat(ls->fs, &e.f, ef);
+        *v = e;
     }
 }
 
